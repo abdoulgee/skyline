@@ -1,4 +1,4 @@
-import { sql, relations } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   index,
   jsonb,
@@ -10,6 +10,7 @@ import {
   boolean,
   decimal,
   pgEnum,
+  serial,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -23,7 +24,7 @@ export const messageTypeEnum = pgEnum("message_type", ["booking", "campaign"]);
 export const messageSenderEnum = pgEnum("message_sender", ["user", "admin"]);
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
-// Session storage table for Replit Auth
+// Session storage table
 export const sessions = pgTable(
   "sessions",
   {
@@ -36,7 +37,9 @@ export const sessions = pgTable(
 
 // Users table
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
+  username: varchar("username").unique().notNull(),
+  password: varchar("password").notNull(),
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
@@ -52,20 +55,22 @@ export const users = pgTable("users", {
 
 // Celebrities table
 export const celebrities = pgTable("celebrities", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   priceUsd: decimal("price_usd", { precision: 12, scale: 2 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
-  imageUrl: varchar("image_url", { length: 500 }),
+  imageUrl: varchar("image_url", { length: 500 }), // Main image (thumbnail)
+  images: jsonb("images").$type<string[]>(), // Array of image URLs
   bio: text("bio"),
+  isCampaignAvailable: boolean("is_campaign_available").default(false), // Campaign availability flag
   status: varchar("status").default("active").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Bookings table
 export const bookings = pgTable("bookings", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
   celebrityId: integer("celebrity_id").notNull().references(() => celebrities.id),
   priceUsd: decimal("price_usd", { precision: 12, scale: 2 }).notNull(),
   status: bookingStatusEnum("status").default("pending").notNull(),
@@ -76,10 +81,10 @@ export const bookings = pgTable("bookings", {
 
 // Campaigns table
 export const campaigns = pgTable("campaigns", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
   celebrityId: integer("celebrity_id").notNull().references(() => celebrities.id),
-  customPriceUsd: decimal("custom_price_usd", { precision: 12, scale: 2 }),
+  customPriceUsd: decimal("custom_price_usd", { precision: 12, scale: 2 }), // Can be null initially
   campaignType: varchar("campaign_type", { length: 100 }).notNull(),
   description: text("description"),
   status: campaignStatusEnum("status").default("pending").notNull(),
@@ -88,20 +93,20 @@ export const campaigns = pgTable("campaigns", {
 
 // Messages table
 export const messages = pgTable("messages", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  id: serial("id").primaryKey(),
   threadId: varchar("thread_id", { length: 100 }).notNull(),
   threadType: messageTypeEnum("thread_type").notNull(),
   referenceId: integer("reference_id").notNull(),
   sender: messageSenderEnum("sender").notNull(),
-  senderUserId: varchar("sender_user_id").references(() => users.id),
+  senderUserId: integer("sender_user_id").references(() => users.id),
   text: text("text").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Deposits table
 export const deposits = pgTable("deposits", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
   amountUsd: decimal("amount_usd", { precision: 12, scale: 2 }).notNull(),
   coin: cryptoCoinEnum("coin").notNull(),
   cryptoAmountExpected: decimal("crypto_amount_expected", { precision: 18, scale: 8 }).notNull(),
@@ -113,8 +118,8 @@ export const deposits = pgTable("deposits", {
 
 // Notifications table
 export const notifications = pgTable("notifications", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message").notNull(),
   type: varchar("type", { length: 50 }).notNull(),
@@ -124,16 +129,16 @@ export const notifications = pgTable("notifications", {
 
 // Admin logs table
 export const adminLogs = pgTable("admin_logs", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  adminId: varchar("admin_id").notNull().references(() => users.id),
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id").notNull().references(() => users.id),
   action: varchar("action", { length: 255 }).notNull(),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Settings table for crypto wallet addresses
+// Settings table
 export const settings = pgTable("settings", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  id: serial("id").primaryKey(),
   key: varchar("key", { length: 100 }).unique().notNull(),
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -182,8 +187,8 @@ export const insertAdminLogSchema = createInsertSchema(adminLogs).omit({ id: tru
 export const insertSettingSchema = createInsertSchema(settings).omit({ id: true, updatedAt: true });
 
 // Types
-export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Celebrity = typeof celebrities.$inferSelect;
 export type InsertCelebrity = z.infer<typeof insertCelebritySchema>;
 export type Booking = typeof bookings.$inferSelect;
@@ -201,7 +206,6 @@ export type InsertAdminLog = z.infer<typeof insertAdminLogSchema>;
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
 
-// Extended types with relations
 export type BookingWithDetails = Booking & {
   user: User;
   celebrity: Celebrity;

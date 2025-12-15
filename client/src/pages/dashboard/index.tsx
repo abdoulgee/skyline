@@ -7,22 +7,26 @@ import { MobileNav } from "@/components/mobile-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import type { User, Booking, Campaign, Notification } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const { user } = useAuth();
 
   const { data: bookings } = useQuery<Booking[]>({
     queryKey: ["/api/bookings"],
+    enabled: !!user,
   });
 
   const { data: campaigns } = useQuery<Campaign[]>({
     queryKey: ["/api/campaigns"],
+    enabled: !!user,
   });
 
   const { data: notifications } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
+    enabled: !!user,
   });
 
   const pendingBookings = bookings?.filter(b => b.status === "pending").length || 0;
@@ -37,6 +41,8 @@ export default function Dashboard() {
       minimumFractionDigits: 2,
     }).format(num);
   };
+  
+  const displayName = user?.firstName || user?.username || "User";
 
   const stats = [
     {
@@ -80,7 +86,7 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8">
           <div className="mb-8">
             <h1 className="font-heading font-bold text-2xl md:text-3xl mb-2">
-              Welcome back, <span className="text-gradient-cyan">{user?.firstName || "User"}</span>
+              Welcome back, <span className="text-gradient-cyan">{displayName}</span>
             </h1>
             <p className="text-muted-foreground">
               Manage your celebrity bookings, campaigns, and wallet from your dashboard.
@@ -96,7 +102,7 @@ export default function Dashboard() {
                       <stat.icon className={`h-5 w-5 md:h-6 md:w-6 ${stat.color}`} />
                     </div>
                     <p className="text-muted-foreground text-xs md:text-sm mb-1">{stat.title}</p>
-                    <p className={`font-heading font-bold text-lg md:text-2xl ${stat.color}`} data-testid={`stat-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <p className={`font-heading font-bold text-lg md:text-2xl ${stat.color}`}>
                       {stat.value}
                     </p>
                   </CardContent>
@@ -110,7 +116,7 @@ export default function Dashboard() {
               <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle className="font-heading text-lg">Recent Bookings</CardTitle>
                 <Link href="/dashboard/bookings">
-                  <Button variant="ghost" size="sm" className="gap-1" data-testid="link-view-all-bookings">
+                  <Button variant="ghost" size="sm" className="gap-1">
                     View All <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
@@ -122,7 +128,6 @@ export default function Dashboard() {
                       <div
                         key={booking.id}
                         className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                        data-testid={`booking-item-${booking.id}`}
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -152,7 +157,7 @@ export default function Dashboard() {
                     <Calendar className="h-10 w-10 mx-auto mb-3 opacity-50" />
                     <p>No bookings yet</p>
                     <Link href="/celebrities">
-                      <Button variant="link" className="mt-2" data-testid="link-browse-celebrities">
+                      <Button variant="link" className="mt-2">
                         Browse celebrities
                       </Button>
                     </Link>
@@ -165,7 +170,7 @@ export default function Dashboard() {
               <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle className="font-heading text-lg">Recent Notifications</CardTitle>
                 <Link href="/dashboard/notifications">
-                  <Button variant="ghost" size="sm" className="gap-1" data-testid="link-view-all-notifications">
+                  <Button variant="ghost" size="sm" className="gap-1">
                     View All <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
@@ -179,7 +184,6 @@ export default function Dashboard() {
                         className={`flex items-start gap-3 p-3 rounded-lg ${
                           notification.isRead ? "bg-muted/30" : "bg-primary/5"
                         }`}
-                        data-testid={`notification-item-${notification.id}`}
                       >
                         <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
                           notification.isRead ? "bg-muted-foreground" : "bg-primary"
@@ -214,7 +218,7 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <Link href="/celebrities">
-                    <Button size="lg" className="bg-skyline-cyan hover:bg-skyline-cyan/90" data-testid="button-explore-celebrities">
+                    <Button size="lg" className="bg-skyline-cyan hover:bg-skyline-cyan/90">
                       Explore Celebrities
                     </Button>
                   </Link>

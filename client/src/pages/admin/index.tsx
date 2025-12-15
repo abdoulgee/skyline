@@ -4,12 +4,13 @@ import { Users, Star, Calendar, Megaphone, Wallet, MessageSquare, Settings, Tren
 import { Header } from "@/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
 
-  const { data: stats } = useQuery<{
+  const { data: stats, isLoading: isLoadingStats } = useQuery<{
     totalUsers: number;
     totalCelebrities: number;
     pendingBookings: number;
@@ -20,54 +21,64 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/stats"],
   });
 
+  const formatRevenue = (value: number) => {
+    return `$${(value || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
+
   const adminStats = [
     {
       title: "Total Users",
-      value: stats?.totalUsers || 0,
+      value: stats?.totalUsers,
       icon: Users,
       href: "/admin/users",
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
+      isCurrency: false,
     },
     {
       title: "Celebrities",
-      value: stats?.totalCelebrities || 0,
+      value: stats?.totalCelebrities,
       icon: Star,
       href: "/admin/celebrities",
       color: "text-skyline-gold",
       bgColor: "bg-skyline-gold/10",
+      isCurrency: false,
     },
     {
       title: "Pending Bookings",
-      value: stats?.pendingBookings || 0,
+      value: stats?.pendingBookings,
       icon: Calendar,
       href: "/admin/bookings",
       color: "text-primary",
       bgColor: "bg-primary/10",
+      isCurrency: false,
     },
     {
       title: "Pending Campaigns",
-      value: stats?.pendingCampaigns || 0,
+      value: stats?.pendingCampaigns,
       icon: Megaphone,
       href: "/admin/campaigns",
       color: "text-chart-4",
       bgColor: "bg-chart-4/10",
+      isCurrency: false,
     },
     {
       title: "Pending Deposits",
-      value: stats?.pendingDeposits || 0,
+      value: stats?.pendingDeposits,
       icon: Wallet,
       href: "/admin/deposits",
       color: "text-green-500",
       bgColor: "bg-green-500/10",
+      isCurrency: false,
     },
     {
       title: "Total Revenue",
-      value: `$${(stats?.totalRevenue || 0).toLocaleString()}`,
+      value: stats?.totalRevenue,
       icon: TrendingUp,
       href: "/admin",
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
+      isCurrency: true,
     },
   ];
 
@@ -91,7 +102,7 @@ export default function AdminDashboard() {
               Admin <span className="text-gradient-cyan">Dashboard</span>
             </h1>
             <p className="text-muted-foreground">
-              Welcome back, {user?.firstName}. Manage the Skyline LTD platform.
+              Welcome back, {user?.firstName || user?.username}. Manage the Skyline LTD platform.
             </p>
           </div>
 
@@ -100,13 +111,23 @@ export default function AdminDashboard() {
               <Link key={stat.title} href={stat.href}>
                 <Card className="hover-elevate cursor-pointer h-full">
                   <CardContent className="p-4">
-                    <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${stat.bgColor} mb-3`}>
-                      <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                    </div>
-                    <p className="text-muted-foreground text-xs mb-1">{stat.title}</p>
-                    <p className={`font-heading font-bold text-xl ${stat.color}`} data-testid={`admin-stat-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      {stat.value}
-                    </p>
+                    {isLoadingStats ? (
+                      <div className="space-y-2">
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                        <Skeleton className="h-3 w-3/4" />
+                        <Skeleton className="h-6 w-full" />
+                      </div>
+                    ) : (
+                      <>
+                        <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${stat.bgColor} mb-3`}>
+                          <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                        </div>
+                        <p className="text-muted-foreground text-xs mb-1">{stat.title}</p>
+                        <p className={`font-heading font-bold text-xl ${stat.color}`} data-testid={`admin-stat-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                          {stat.isCurrency ? formatRevenue(stat.value as number) : (stat.value || 0).toLocaleString()}
+                        </p>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
@@ -150,11 +171,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">CoinGecko API</span>
-                    <span className="text-sm font-medium text-green-500">Connected</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Email Service</span>
-                    <span className="text-sm font-medium text-green-500">Active</span>
+                    <span className="text-sm font-medium text-green-500">Connected (Mocked)</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Database</span>

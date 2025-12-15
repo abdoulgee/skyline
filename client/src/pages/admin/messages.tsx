@@ -12,18 +12,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Message, BookingWithDetails, CampaignWithDetails } from "@shared/schema";
+import type { Message, User } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 
 interface Thread {
   id: string;
+  threadId: string;
   type: "booking" | "campaign";
+  threadType: "booking" | "campaign"; // backend naming
   referenceId: number;
-  user: {
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    profileImageUrl?: string | null;
-  };
+  user: User;
   celebrity: {
     name: string;
     imageUrl: string | null;
@@ -31,6 +29,7 @@ interface Thread {
 }
 
 export default function AdminMessages() {
+  const { user: adminUser } = useAuth();
   const { toast } = useToast();
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
@@ -41,88 +40,52 @@ export default function AdminMessages() {
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: bookings } = useQuery<BookingWithDetails[]>({
-    queryKey: ["/api/admin/bookings"],
+  const { data: threads, isLoading: threadsLoading } = useQuery<Thread[]>({
+    queryKey: ["/api/messages"],
+    enabled: !!adminUser && adminUser.role === 'admin'
   });
 
-  const { data: campaigns } = useQuery<CampaignWithDetails[]>({
-    queryKey: ["/api/admin/campaigns"],
-  });
-
-  const threadId = selectedThread ? `${selectedThread.type}-${selectedThread.referenceId}` : null;
+  const threadId = selectedThread ? selectedThread.threadId : null;
 
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
-    queryKey: ["/api/admin/messages", threadId],
+    queryKey: ["/api/messages", threadId],
     enabled: !!threadId,
+    refetchInterval: 5000 // Poll for new messages
   });
 
   const sendMessageMutation = useMutation({
     mutationFn: async (text: string) => {
       if (!selectedThread) return;
       return apiRequest("POST", "/api/admin/messages", {
-        threadId: `${selectedThread.type}-${selectedThread.referenceId}`,
-        threadType: selectedThread.type,
+        threadId: selectedThread.threadId,
+        threadType: selectedThread.threadType,
         referenceId: selectedThread.referenceId,
         text,
-        sender: "agent",
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/messages", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/messages", threadId] });
       setMessage("");
     },
-    onError: () => {
-      toast({ title: "Failed to send message", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "Failed to send message", description: error.message, variant: "destructive" });
     },
   });
 
-  const threads: Thread[] = [
-    ...(bookings?.map((b) => ({
-      id: `booking-${b.id}`,
-      type: "booking" as const,
-      referenceId: b.id,
-      user: {
-        firstName: b.user?.firstName,
-        lastName: b.user?.lastName,
-        email: b.user?.email,
-        profileImageUrl: b.user?.profileImageUrl,
-      },
-      celebrity: {
-        name: b.celebrity?.name || "Unknown",
-        imageUrl: b.celebrity?.imageUrl || null,
-      },
-    })) || []),
-    ...(campaigns?.map((c) => ({
-      id: `campaign-${c.id}`,
-      type: "campaign" as const,
-      referenceId: c.id,
-      user: {
-        firstName: c.user?.firstName,
-        lastName: c.user?.lastName,
-        email: c.user?.email,
-        profileImageUrl: c.user?.profileImageUrl,
-      },
-      celebrity: {
-        name: c.celebrity?.name || "Unknown",
-        imageUrl: c.celebrity?.imageUrl || null,
-      },
-    })) || []),
-  ];
-
   useEffect(() => {
-    if (typeParam && idParam && threads.length > 0) {
+    if (typeParam && idParam && threads && threads.length > 0) {
       const thread = threads.find(
-        (t) => t.type === typeParam && t.referenceId === parseInt(idParam)
+        (t) => t.threadType === typeParam && t.referenceId === parseInt(idParam)
       );
       if (thread) {
         setSelectedThread(thread);
       }
     }
-  }, [typeParam, idParam, threads.length]);
+  }, [typeParam, idParam, threads]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, selectedThread]);
 
   const handleSendMessage = () => {
     if (!message.trim()) return;
@@ -136,6 +99,15 @@ export default function AdminMessages() {
     }
   };
 
+  if (threadsLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 bg-muted/30 p-8"><Skeleton className="h-[500px]" /></main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -147,44 +119,44 @@ export default function AdminMessages() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-280px)] min-h-[500px]">
+            {/* Thread List */}
             <Card className={`lg:col-span-1 ${selectedThread ? "hidden lg:block" : ""}`}>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  All Conversations
+                  Conversations
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <ScrollArea className="h-[calc(100vh-400px)] min-h-[350px]">
-                  {threads.length > 0 ? (
+                  {threads && threads.length > 0 ? (
                     <div className="divide-y">
                       {threads.map((thread) => (
                         <button
-                          key={thread.id}
+                          key={thread.threadId}
                           onClick={() => setSelectedThread(thread)}
                           className={`w-full p-4 text-left hover:bg-muted/50 transition-colors ${
-                            selectedThread?.id === thread.id ? "bg-muted" : ""
+                            selectedThread?.threadId === thread.threadId ? "bg-muted" : ""
                           }`}
-                          data-testid={`thread-${thread.id}`}
                         >
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10">
                               <AvatarImage src={thread.user.profileImageUrl || undefined} />
-                              <AvatarFallback>{thread.user.firstName?.[0] || thread.user.email?.[0]?.toUpperCase()}</AvatarFallback>
+                              <AvatarFallback>{thread.user.firstName?.[0] || thread.user.username?.[0]?.toUpperCase()}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-sm truncate">
-                                  {thread.user.firstName} {thread.user.lastName}
+                                  {thread.user.firstName || thread.user.username}
                                 </p>
-                                {thread.type === "booking" ? (
+                                {thread.threadType === "booking" ? (
                                   <Calendar className="h-3 w-3 text-primary flex-shrink-0" />
                                 ) : (
                                   <Megaphone className="h-3 w-3 text-chart-4 flex-shrink-0" />
                                 )}
                               </div>
                               <p className="text-xs text-muted-foreground truncate">
-                                {thread.celebrity.name} - {thread.type} #{thread.referenceId}
+                                Ref #{thread.referenceId}
                               </p>
                             </div>
                           </div>
@@ -201,6 +173,7 @@ export default function AdminMessages() {
               </CardContent>
             </Card>
 
+            {/* Message Area */}
             <Card className={`lg:col-span-2 flex flex-col ${!selectedThread ? "hidden lg:flex" : ""}`}>
               {selectedThread ? (
                 <>
@@ -211,7 +184,6 @@ export default function AdminMessages() {
                         size="icon"
                         className="lg:hidden"
                         onClick={() => setSelectedThread(null)}
-                        data-testid="button-back-threads"
                       >
                         <ArrowLeft className="h-5 w-5" />
                       </Button>
@@ -221,13 +193,13 @@ export default function AdminMessages() {
                       </Avatar>
                       <div className="flex-1">
                         <p className="font-semibold">
-                          {selectedThread.user.firstName} {selectedThread.user.lastName}
+                          {selectedThread.user.firstName || selectedThread.user.username}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {selectedThread.celebrity.name} - {selectedThread.type} #{selectedThread.referenceId}
+                          Topic: {selectedThread.threadType} #{selectedThread.referenceId}
                         </p>
                       </div>
-                      <Badge variant="secondary">Responding as Agent</Badge>
+                      <Badge variant="secondary">Agent Mode</Badge>
                     </div>
                   </CardHeader>
 
@@ -243,19 +215,18 @@ export default function AdminMessages() {
                         {messages.map((msg) => (
                           <div
                             key={msg.id}
-                            className={`flex ${msg.sender === "agent" ? "justify-end" : "justify-start"}`}
-                            data-testid={`message-${msg.id}`}
+                            className={`flex ${msg.sender === "admin" ? "justify-end" : "justify-start"}`}
                           >
                             <div
                               className={`max-w-[80%] p-3 rounded-lg ${
-                                msg.sender === "agent"
+                                msg.sender === "admin"
                                   ? "bg-primary text-primary-foreground"
                                   : "bg-muted"
                               }`}
                             >
                               <p className="text-sm">{msg.text}</p>
-                              <p className={`text-xs mt-1 ${
-                                msg.sender === "agent" ? "text-primary-foreground/70" : "text-muted-foreground"
+                              <p className={`text-[10px] mt-1 text-right ${
+                                msg.sender === "admin" ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}>
                                 {new Date(msg.createdAt!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                               </p>
@@ -269,13 +240,13 @@ export default function AdminMessages() {
                         <div>
                           <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
                           <p>No messages yet</p>
-                          <p className="text-sm">Start the conversation with the user</p>
                         </div>
                       </div>
                     )}
                   </ScrollArea>
 
-                  <div className="border-t p-4 flex-shrink-0">
+                  {/* Message Input - Explicitly visible */}
+                  <div className="border-t p-4 flex-shrink-0 bg-background">
                     <div className="flex gap-2">
                       <Input
                         value={message}
@@ -283,12 +254,11 @@ export default function AdminMessages() {
                         onKeyPress={handleKeyPress}
                         placeholder="Type your message as agent..."
                         className="flex-1"
-                        data-testid="input-message"
+                        autoFocus
                       />
                       <Button
                         onClick={handleSendMessage}
                         disabled={!message.trim() || sendMessageMutation.isPending}
-                        data-testid="button-send-message"
                       >
                         <Send className="h-4 w-4" />
                       </Button>

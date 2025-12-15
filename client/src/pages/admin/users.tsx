@@ -23,20 +23,23 @@ export default function AdminUsers() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
 
+  // FIX: Admin users endpoint should be /api/admin/users
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
   });
 
   const toggleRoleMutation = useMutation({
+    // FIX: User IDs are now integers (serial in schema), so ID must be parsed
     mutationFn: async ({ id, role }: { id: number; role: string }) => {
+      // The API should handle ID parsing, but we ensure it's sent correctly.
       return apiRequest("PATCH", `/api/admin/users/${id}`, { role });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({ title: "User role updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update user", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "Failed to update user", description: error.message, variant: "destructive" });
     },
   });
 
@@ -52,7 +55,8 @@ export default function AdminUsers() {
   const filteredUsers = users?.filter((u) =>
     u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.lastName?.toLowerCase().includes(searchQuery.toLowerCase())
+    u.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.username?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -62,7 +66,7 @@ export default function AdminUsers() {
         <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8">
           <div className="mb-8">
             <h1 className="font-heading font-bold text-2xl md:text-3xl mb-2">Manage Users</h1>
-            <p className="text-muted-foreground">View and manage registered users.</p>
+            <p className="text-muted-foreground">View and manage registered users ({users?.length || 0}).</p>
           </div>
 
           <Card>
@@ -103,12 +107,15 @@ export default function AdminUsers() {
                             <div className="flex items-center gap-3">
                               <Avatar className="h-8 w-8">
                                 <AvatarImage src={user.profileImageUrl || undefined} />
-                                <AvatarFallback>{user.firstName?.[0] || user.email?.[0]?.toUpperCase()}</AvatarFallback>
+                                <AvatarFallback>{user.firstName?.[0] || user.username?.[0]?.toUpperCase()}</AvatarFallback>
                               </Avatar>
-                              <span className="font-medium">{user.firstName} {user.lastName}</span>
+                              <div>
+                                <p className="font-medium">{user.firstName} {user.lastName} ({user.username})</p>
+                                <p className="text-xs text-muted-foreground">{user.email}</p>
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                          <TableCell className="text-muted-foreground">{user.email || 'N/A'}</TableCell>
                           <TableCell className="font-medium text-skyline-gold">
                             {formatBalance(user.balanceUsd)}
                           </TableCell>

@@ -1,8 +1,9 @@
 import { Link } from "wouter";
-import { Star } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Star, ArrowRight } from "lucide-react";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Celebrity } from "@shared/schema";
 
 interface CelebrityCardProps {
@@ -19,51 +20,75 @@ export function CelebrityCard({ celebrity }: CelebrityCardProps) {
     }).format(num);
   };
 
+  // Improved helper to determine image source
+  const getImageSrc = (url: string | null) => {
+    if (!url) return "https://placehold.co/400x500/0A1A2F/00B8D4?text=Profile";
+    
+    // If it's a full URL (http/https), use it directly
+    if (url.startsWith("http") || url.startsWith("https")) {
+      return url;
+    }
+    
+    // If it's a local upload path, ensure it starts with / (root relative)
+    // The server/routes.ts returns paths like "/uploads/filename.jpg"
+    if (url.startsWith("/uploads/")) {
+      return url; 
+    }
+    
+    // If path is stored as "uploads/filename.jpg" (without leading slash), fix it
+    if (url.startsWith("uploads/")) {
+      return `/${url}`;
+    }
+
+    return url;
+  };
+
   return (
     <Link href={`/celebrity/${celebrity.id}`}>
-      <Card 
-        className="celebrity-card overflow-hidden cursor-pointer group"
-        data-testid={`card-celebrity-${celebrity.id}`}
-      >
-        <div className="relative aspect-square overflow-hidden">
+      <Card className="hover-elevate cursor-pointer overflow-hidden h-full flex flex-col group border-border/50">
+        <div className="relative aspect-[4/5] overflow-hidden bg-muted">
           <img
-            src={celebrity.imageUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop"}
+            src={getImageSrc(celebrity.imageUrl)}
             alt={celebrity.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+            onError={(e) => {
+                e.currentTarget.src = "https://placehold.co/400x500/0A1A2F/00B8D4?text=Profile";
+            }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-skyline-navy/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <Badge 
-            className="absolute top-3 left-3 bg-skyline-navy/80 text-white border-0"
-            size="sm"
-          >
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60" />
+          <Badge className="absolute top-3 left-3 bg-skyline-navy/90 border-none shadow-sm backdrop-blur-sm">
             {celebrity.category}
           </Badge>
+          {celebrity.isCampaignAvailable && (
+             <Badge variant="outline" className="absolute top-3 right-3 bg-black/50 text-white border-white/20 backdrop-blur-sm">
+                Campaigns
+             </Badge>
+          )}
         </div>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-heading font-semibold text-lg line-clamp-1">
+        <CardContent className="p-4 flex-1">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="font-heading font-bold text-lg line-clamp-1 group-hover:text-primary transition-colors">
               {celebrity.name}
             </h3>
-            <div className="flex items-center gap-1 text-skyline-gold flex-shrink-0">
-              <Star className="h-4 w-4 fill-current" />
-              <span className="text-sm font-medium">4.9</span>
+            <div className="flex items-center gap-1 text-skyline-gold text-sm font-medium">
+              <Star className="h-3.5 w-3.5 fill-current" />
+              <span>4.9</span>
             </div>
           </div>
-          <p className="text-muted-foreground text-sm line-clamp-2">
-            {celebrity.bio || "World-renowned talent available for exclusive bookings and campaigns."}
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {celebrity.bio || "Available for booking and exclusive events."}
           </p>
-          <div className="flex items-center justify-between gap-2 pt-2">
-            <div>
-              <span className="text-xs text-muted-foreground">Starting at</span>
-              <p className="font-heading font-bold text-lg text-skyline-gold">
-                {formatPrice(celebrity.priceUsd)}
-              </p>
-            </div>
-            <Button size="sm" data-testid={`button-view-celebrity-${celebrity.id}`}>
-              View Profile
-            </Button>
-          </div>
         </CardContent>
+        <CardFooter className="p-4 pt-0 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">Starting at</p>
+            <p className="font-bold text-skyline-gold">{formatPrice(celebrity.priceUsd)}</p>
+          </div>
+          <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity -mr-2">
+            View <ArrowRight className="ml-1 h-4 w-4" />
+          </Button>
+        </CardFooter>
       </Card>
     </Link>
   );
@@ -71,22 +96,16 @@ export function CelebrityCard({ celebrity }: CelebrityCardProps) {
 
 export function CelebrityCardSkeleton() {
   return (
-    <Card className="overflow-hidden">
-      <div className="aspect-square bg-muted animate-pulse" />
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="h-6 w-32 bg-muted rounded animate-pulse" />
-          <div className="h-5 w-12 bg-muted rounded animate-pulse" />
-        </div>
-        <div className="space-y-2">
-          <div className="h-4 w-full bg-muted rounded animate-pulse" />
-          <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
-        </div>
-        <div className="flex items-center justify-between pt-2">
-          <div className="h-8 w-20 bg-muted rounded animate-pulse" />
-          <div className="h-9 w-24 bg-muted rounded animate-pulse" />
-        </div>
+    <Card className="h-full border-border/50">
+      <div className="relative aspect-[4/5] bg-muted animate-pulse" />
+      <CardContent className="p-4">
+        <Skeleton className="h-6 w-3/4 mb-2" />
+        <Skeleton className="h-4 w-full mb-1" />
+        <Skeleton className="h-4 w-2/3" />
       </CardContent>
+      <CardFooter className="p-4 pt-0">
+        <Skeleton className="h-8 w-1/3" />
+      </CardFooter>
     </Card>
   );
 }

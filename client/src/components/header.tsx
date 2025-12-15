@@ -1,10 +1,12 @@
-import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Wallet, Bell, User, LogIn } from "lucide-react";
+import { Menu, X, Wallet, Bell, LogIn, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { Notification } from "@shared/schema";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,12 +15,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useQuery } from "@tanstack/react-query";
-import type { Notification } from "@shared/schema";
 
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/celebrities", label: "Celebrities" },
+  { href: "/campaigns", label: "Campaigns" }, // Added Campaign Page
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ];
@@ -26,11 +27,11 @@ const navLinks = [
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [location] = useLocation();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, logoutMutation } = useAuth();
 
   const { data: notifications } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
-    enabled: isAuthenticated,
+    enabled: !!user,
   });
 
   const unreadCount = notifications?.filter(n => !n.isRead).length || 0;
@@ -40,7 +41,7 @@ export function Header() {
       <div className="container mx-auto px-4 md:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex items-center gap-2" data-testid="link-logo">
+            <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-md bg-gradient-to-br from-skyline-cyan to-skyline-navy flex items-center justify-center">
                 <span className="text-white font-heading font-bold text-sm">S</span>
               </div>
@@ -60,7 +61,6 @@ export function Header() {
                       ? "text-primary"
                       : "text-muted-foreground"
                   }`}
-                  data-testid={`link-nav-${link.label.toLowerCase()}`}
                 >
                   {link.label}
                 </span>
@@ -71,24 +71,29 @@ export function Header() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
 
-            {isLoading ? (
-              <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
-            ) : isAuthenticated && user ? (
+            {user ? (
               <>
+                 <Link href="/dashboard/messages">
+                  <Button variant="ghost" size="icon" className="relative">
+                    <MessageSquare className="h-5 w-5" />
+                    <span className="sr-only">Messages</span>
+                  </Button>
+                </Link>
+
                 <Link href="/dashboard/wallet">
-                  <Button variant="ghost" size="icon" className="relative" data-testid="button-wallet">
+                  <Button variant="ghost" size="icon" className="relative">
                     <Wallet className="h-5 w-5" />
                     <span className="sr-only">Wallet</span>
                   </Button>
                 </Link>
 
                 <Link href="/dashboard/notifications">
-                  <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+                  <Button variant="ghost" size="icon" className="relative">
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
                       <Badge
                         variant="destructive"
-                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                        className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center p-0 text-[10px]"
                       >
                         {unreadCount > 9 ? "9+" : unreadCount}
                       </Badge>
@@ -99,44 +104,41 @@ export function Header() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
+                    <Button variant="ghost" size="icon" className="rounded-full">
                       <Avatar className="h-8 w-8">
                         <AvatarImage src={user.profileImageUrl || undefined} alt={user.firstName || "User"} />
                         <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                          {user.firstName?.[0] || user.email?.[0]?.toUpperCase() || "U"}
+                          {user.firstName?.[0] || user.username?.[0]?.toUpperCase() || "U"}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard" data-testid="link-dashboard">
-                        <span className="w-full">Dashboard</span>
-                      </Link>
+                      <Link href="/dashboard">Dashboard</Link>
                     </DropdownMenuItem>
                     {user.role === "admin" && (
                       <DropdownMenuItem asChild>
-                        <Link href="/admin" data-testid="link-admin">
-                          <span className="w-full">Admin Panel</span>
-                        </Link>
+                        <Link href="/admin">Admin Panel</Link>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <a href="/api/logout" data-testid="button-logout">
-                        Log out
-                      </a>
+                    <DropdownMenuItem 
+                      onClick={() => logoutMutation.mutate()}
+                      className="cursor-pointer"
+                    >
+                      Log out
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
             ) : (
-              <a href="/api/login">
-                <Button data-testid="button-login">
+              <Link href="/auth">
+                <Button>
                   <LogIn className="h-4 w-4 mr-2" />
                   Sign In
                 </Button>
-              </a>
+              </Link>
             )}
 
             <Button
@@ -144,35 +146,12 @@ export function Header() {
               size="icon"
               className="md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              data-testid="button-mobile-menu"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
         </div>
       </div>
-
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t bg-background animate-slide-in-right">
-          <nav className="container mx-auto px-4 py-4 flex flex-col gap-2">
-            {navLinks.map((link) => (
-              <Link key={link.href} href={link.href}>
-                <span
-                  className={`block py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                    location === link.href
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                  data-testid={`link-mobile-${link.label.toLowerCase()}`}
-                >
-                  {link.label}
-                </span>
-              </Link>
-            ))}
-          </nav>
-        </div>
-      )}
     </header>
   );
 }

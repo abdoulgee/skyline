@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SiBitcoin, SiEthereum, SiTether } from "react-icons/si";
@@ -27,9 +26,10 @@ export default function AdminSettings() {
   useEffect(() => {
     if (settings) {
       setWallets({
-        BTC: settings.BTC_WALLET || "",
-        ETH: settings.ETH_WALLET || "",
-        USDT: settings.USDT_WALLET || "",
+        // Keys returned from server are uppercase now (WALLET_BTC)
+        BTC: settings.WALLET_BTC || "",
+        ETH: settings.WALLET_ETH || "",
+        USDT: settings.WALLET_USDT || "",
       });
     }
   }, [settings]);
@@ -57,96 +57,38 @@ export default function AdminSettings() {
       <Header />
       <main className="flex-1 bg-muted/30">
         <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <h1 className="font-heading font-bold text-2xl md:text-3xl mb-2">Platform Settings</h1>
-            <p className="text-muted-foreground">Configure system-wide settings and wallet addresses.</p>
-          </div>
-
-          <div className="max-w-2xl">
+          <div className="max-w-2xl mx-auto">
             <Card>
               <CardHeader>
-                <CardTitle className="font-heading flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  Cryptocurrency Wallet Addresses
-                </CardTitle>
-                <CardDescription>
-                  Configure the wallet addresses where users will send cryptocurrency deposits.
-                </CardDescription>
+                <CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5" /> Admin Wallet Addresses</CardTitle>
+                <CardDescription>These addresses will be displayed to users when they deposit funds.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <SiBitcoin className="h-5 w-5 text-orange-500" />
-                    Bitcoin (BTC) Wallet
-                  </Label>
-                  <Input
-                    value={wallets.BTC}
-                    onChange={(e) => setWallets({ ...wallets, BTC: e.target.value })}
-                    placeholder="bc1q..."
-                    className="font-mono text-sm"
-                    data-testid="input-btc-wallet"
-                  />
+                  <Label>Bitcoin (BTC)</Label>
+                  <div className="relative">
+                    <SiBitcoin className="absolute left-3 top-3 text-orange-500" />
+                    <Input className="pl-10" value={wallets.BTC} onChange={e => setWallets({...wallets, BTC: e.target.value})} />
+                  </div>
                 </div>
-
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <SiEthereum className="h-5 w-5 text-blue-500" />
-                    Ethereum (ETH) Wallet
-                  </Label>
-                  <Input
-                    value={wallets.ETH}
-                    onChange={(e) => setWallets({ ...wallets, ETH: e.target.value })}
-                    placeholder="0x..."
-                    className="font-mono text-sm"
-                    data-testid="input-eth-wallet"
-                  />
+                  <Label>Ethereum (ETH)</Label>
+                  <div className="relative">
+                    <SiEthereum className="absolute left-3 top-3 text-blue-500" />
+                    <Input className="pl-10" value={wallets.ETH} onChange={e => setWallets({...wallets, ETH: e.target.value})} />
+                  </div>
                 </div>
-
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <SiTether className="h-5 w-5 text-green-500" />
-                    USDT (TRC20) Wallet
-                  </Label>
-                  <Input
-                    value={wallets.USDT}
-                    onChange={(e) => setWallets({ ...wallets, USDT: e.target.value })}
-                    placeholder="T..."
-                    className="font-mono text-sm"
-                    data-testid="input-usdt-wallet"
-                  />
+                  <Label>USDT (TRC20)</Label>
+                  <div className="relative">
+                    <SiTether className="absolute left-3 top-3 text-green-500" />
+                    <Input className="pl-10" value={wallets.USDT} onChange={e => setWallets({...wallets, USDT: e.target.value})} />
+                  </div>
                 </div>
-
-                <Separator />
-
-                <Button
-                  onClick={() => saveMutation.mutate()}
-                  disabled={saveMutation.isPending}
-                  className="gap-2"
-                  data-testid="button-save-settings"
-                >
-                  <Save className="h-4 w-4" />
-                  {saveMutation.isPending ? "Saving..." : "Save Settings"}
+                <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="w-full gap-2">
+                    <Save className="h-4 w-4" />
+                    {saveMutation.isPending ? "Saving..." : "Save Settings"}
                 </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="font-heading">Platform Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Platform Name</span>
-                  <span className="font-medium">Skyline LTD</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Version</span>
-                  <span className="font-medium">1.0.0</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Environment</span>
-                  <span className="font-medium">Production</span>
-                </div>
               </CardContent>
             </Card>
           </div>

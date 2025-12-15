@@ -30,20 +30,23 @@ export default function AdminDeposits() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // FIX: Ensure correct admin deposits endpoint is used
   const { data: deposits, isLoading } = useQuery<DepositWithUser[]>({
     queryKey: ["/api/admin/deposits"],
   });
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      // FIX: Ensure ID is correctly passed to the route
       return apiRequest("PATCH", `/api/admin/deposits/${id}`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/deposits"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] }); // Refresh stats too
       toast({ title: "Deposit status updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update deposit", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "Failed to update deposit", description: error.message, variant: "destructive" });
     },
   });
 
@@ -59,6 +62,7 @@ export default function AdminDeposits() {
   const filteredDeposits = deposits?.filter((d) => {
     const matchesStatus = statusFilter === "all" || d.status === statusFilter;
     const matchesSearch = d.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.user?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.id.toString().includes(searchQuery);
     return matchesStatus && matchesSearch;
   });
@@ -72,6 +76,11 @@ export default function AdminDeposits() {
       default:
         return "outline";
     }
+  };
+
+  const handleApprove = (id: number) => {
+    // In a production app, you would prompt for a transaction hash here.
+    updateStatusMutation.mutate({ id, status: "approved" });
   };
 
   return (
@@ -90,7 +99,7 @@ export default function AdminDeposits() {
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by email or ID..."
+                    placeholder="Search by email, username, or ID..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9"
@@ -135,8 +144,8 @@ export default function AdminDeposits() {
                           <TableCell className="font-mono text-sm">#{deposit.id}</TableCell>
                           <TableCell>
                             <div>
-                              <p className="font-medium">{deposit.user?.firstName} {deposit.user?.lastName}</p>
-                              <p className="text-xs text-muted-foreground">{deposit.user?.email}</p>
+                              <p className="font-medium">{deposit.user?.firstName || deposit.user?.username}</p>
+                              <p className="text-xs text-muted-foreground">{deposit.user?.email || 'N/A'}</p>
                             </div>
                           </TableCell>
                           <TableCell className="font-semibold text-skyline-gold">
@@ -162,7 +171,7 @@ export default function AdminDeposits() {
                                 <Button
                                   variant="default"
                                   size="sm"
-                                  onClick={() => updateStatusMutation.mutate({ id: deposit.id, status: "approved" })}
+                                  onClick={() => handleApprove(deposit.id)}
                                   disabled={updateStatusMutation.isPending}
                                   data-testid={`button-approve-${deposit.id}`}
                                 >
@@ -181,10 +190,16 @@ export default function AdminDeposits() {
                                 </Button>
                               </div>
                             ) : (
-                              <Button variant="ghost" size="sm" data-testid={`button-receipt-${deposit.id}`}>
-                                <Download className="h-4 w-4 mr-1" />
-                                Receipt
-                              </Button>
+                              <a 
+                                href={`/api/invoices/deposit/${deposit.id}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                <Button variant="ghost" size="sm" data-testid={`button-receipt-${deposit.id}`}>
+                                  <Download className="h-4 w-4 mr-1" />
+                                  Receipt
+                                </Button>
+                              </a>
                             )}
                           </TableCell>
                         </TableRow>

@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Star, Plus, Edit, Trash2, Search } from "lucide-react";
+import { Plus, Edit, Trash2, Search, X } from "lucide-react";
 import { Header } from "@/components/header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -37,56 +38,186 @@ import type { Celebrity } from "@shared/schema";
 
 const categories = ["Actor", "Musician", "Athlete", "Influencer", "Comedian", "Model", "TV Host"];
 
+const CelebrityForm = ({ onSubmit, initialData, isSubmitting }: any) => {
+  const [formData, setFormData] = useState(initialData || {
+    name: "",
+    category: "Actor",
+    priceUsd: "",
+    images: [], // Array of strings (urls)
+    bio: "",
+    isCampaignAvailable: false
+  });
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+       setUploading(true);
+       const uploadData = new FormData();
+       for(let i=0; i<e.target.files.length; i++) {
+         uploadData.append('images', e.target.files[i]);
+       }
+       
+       try {
+         const res = await fetch('/api/upload', {
+           method: 'POST',
+           body: uploadData
+         });
+         const data = await res.json();
+         if(data.paths && data.paths.length > 0) {
+            // Append new images to existing list
+            setFormData(prev => ({
+                ...prev,
+                images: [...(prev.images || []), ...data.paths]
+            }));
+         }
+       } catch(e) {
+         console.error("Upload failed", e);
+       } finally {
+         setUploading(false);
+       }
+    }
+  };
+
+  const removeImage = (index: number) => {
+      const newImages = [...(formData.images || [])];
+      newImages.splice(index, 1);
+      setFormData({...formData, images: newImages});
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Name</Label>
+        <Input
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="Celebrity Name"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Category</Label>
+          <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Booking Price (USD)</Label>
+          <Input
+            type="number"
+            value={formData.priceUsd}
+            onChange={(e) => setFormData({ ...formData, priceUsd: e.target.value })}
+            placeholder="10000"
+          />
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <Label>Images</Label>
+        <div className="flex gap-2">
+            <Input 
+                type="file" 
+                multiple 
+                accept="image/*"
+                onChange={handleFileUpload}
+                disabled={uploading}
+            />
+        </div>
+        <div className="grid grid-cols-3 gap-2 mt-2">
+            {(formData.images || []).map((img: string, idx: number) => (
+                <div key={idx} className="relative group aspect-square border rounded overflow-hidden">
+                    <img src={img} className="object-cover w-full h-full" alt="preview" />
+                    <button 
+                        onClick={() => removeImage(idx)}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
+                </div>
+            ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Bio</Label>
+        <Textarea
+          value={formData.bio}
+          onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+          placeholder="Celebrity biography..."
+          rows={4}
+        />
+      </div>
+      
+      <div className="flex items-center space-x-2">
+        <Checkbox 
+            id="campaign" 
+            checked={formData.isCampaignAvailable}
+            onCheckedChange={(checked) => setFormData({ ...formData, isCampaignAvailable: !!checked })}
+        />
+        <Label htmlFor="campaign">Available for Campaigns?</Label>
+      </div>
+
+      <Button onClick={() => onSubmit(formData)} disabled={isSubmitting || uploading} className="w-full">
+        {isSubmitting ? "Saving..." : "Save Celebrity"}
+      </Button>
+    </div>
+  );
+};
+
 export default function AdminCelebrities() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingCelebrity, setEditingCelebrity] = useState<Celebrity | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    category: "Actor",
-    priceUsd: "",
-    imageUrl: "",
-    bio: "",
-  });
 
   const { data: celebrities, isLoading } = useQuery<Celebrity[]>({
     queryKey: ["/api/celebrities"],
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      return apiRequest("POST", "/api/admin/celebrities", data);
+    mutationFn: async (data: any) => {
+      const payload = {
+        ...data,
+        priceUsd: parseFloat(data.priceUsd).toFixed(2),
+      };
+      return apiRequest("POST", "/api/celebrities", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/celebrities"] });
       toast({ title: "Celebrity added successfully" });
       setIsAddOpen(false);
-      resetForm();
     },
-    onError: () => {
-      toast({ title: "Failed to add celebrity", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "Failed to add celebrity", description: error.message, variant: "destructive" });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
-      return apiRequest("PATCH", `/api/admin/celebrities/${id}`, data);
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const payload = {
+        ...data,
+        priceUsd: parseFloat(data.priceUsd).toFixed(2),
+      };
+      return apiRequest("PATCH", `/api/celebrities/${id}`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/celebrities"] });
       toast({ title: "Celebrity updated successfully" });
       setEditingCelebrity(null);
-      resetForm();
     },
-    onError: () => {
-      toast({ title: "Failed to update celebrity", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "Failed to update celebrity", description: error.message, variant: "destructive" });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest("DELETE", `/api/admin/celebrities/${id}`);
+      return apiRequest("DELETE", `/api/celebrities/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/celebrities"] });
@@ -97,106 +228,8 @@ export default function AdminCelebrities() {
     },
   });
 
-  const resetForm = () => {
-    setFormData({ name: "", category: "Actor", priceUsd: "", imageUrl: "", bio: "" });
-  };
-
-  const handleEdit = (celebrity: Celebrity) => {
-    setEditingCelebrity(celebrity);
-    setFormData({
-      name: celebrity.name,
-      category: celebrity.category,
-      priceUsd: celebrity.priceUsd.toString(),
-      imageUrl: celebrity.imageUrl || "",
-      bio: celebrity.bio || "",
-    });
-  };
-
-  const handleSubmit = () => {
-    if (editingCelebrity) {
-      updateMutation.mutate({ id: editingCelebrity.id, data: formData });
-    } else {
-      createMutation.mutate(formData);
-    }
-  };
-
   const filteredCelebrities = celebrities?.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const formatPrice = (price: string | number) => {
-    const num = typeof price === "string" ? parseFloat(price) : price;
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(num);
-  };
-
-  const CelebrityForm = () => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Name</Label>
-        <Input
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="Celebrity Name"
-          data-testid="input-celebrity-name"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Category</Label>
-          <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
-            <SelectTrigger data-testid="select-category">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Price (USD)</Label>
-          <Input
-            type="number"
-            value={formData.priceUsd}
-            onChange={(e) => setFormData({ ...formData, priceUsd: e.target.value })}
-            placeholder="10000"
-            data-testid="input-price"
-          />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label>Image URL</Label>
-        <Input
-          value={formData.imageUrl}
-          onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-          placeholder="https://example.com/image.jpg"
-          data-testid="input-image-url"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>Bio</Label>
-        <Textarea
-          value={formData.bio}
-          onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-          placeholder="Celebrity biography..."
-          rows={4}
-          data-testid="input-bio"
-        />
-      </div>
-      <Button
-        onClick={handleSubmit}
-        disabled={createMutation.isPending || updateMutation.isPending}
-        className="w-full"
-        data-testid="button-save-celebrity"
-      >
-        {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save Celebrity"}
-      </Button>
-    </div>
   );
 
   return (
@@ -211,16 +244,19 @@ export default function AdminCelebrities() {
             </div>
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2" onClick={resetForm} data-testid="button-add-celebrity">
+                <Button className="gap-2">
                   <Plus className="h-4 w-4" />
                   Add Celebrity
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Celebrity</DialogTitle>
                 </DialogHeader>
-                <CelebrityForm />
+                <CelebrityForm 
+                    onSubmit={(data: any) => createMutation.mutate(data)} 
+                    isSubmitting={createMutation.isPending}
+                />
               </DialogContent>
             </Dialog>
           </div>
@@ -235,7 +271,6 @@ export default function AdminCelebrities() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9"
-                    data-testid="input-search"
                   />
                 </div>
               </div>
@@ -259,7 +294,7 @@ export default function AdminCelebrities() {
                       </TableRow>
                     ) : filteredCelebrities && filteredCelebrities.length > 0 ? (
                       filteredCelebrities.map((celebrity) => (
-                        <TableRow key={celebrity.id} data-testid={`row-celebrity-${celebrity.id}`}>
+                        <TableRow key={celebrity.id}>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <Avatar className="h-10 w-10">
@@ -268,9 +303,7 @@ export default function AdminCelebrities() {
                               </Avatar>
                               <div>
                                 <p className="font-medium">{celebrity.name}</p>
-                                <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                  {celebrity.bio || "No bio"}
-                                </p>
+                                {celebrity.isCampaignAvailable && <Badge variant="outline" className="text-[10px]">Campaigns</Badge>}
                               </div>
                             </div>
                           </TableCell>
@@ -278,7 +311,7 @@ export default function AdminCelebrities() {
                             <Badge variant="secondary">{celebrity.category}</Badge>
                           </TableCell>
                           <TableCell className="font-medium text-skyline-gold">
-                            {formatPrice(celebrity.priceUsd)}
+                            ${celebrity.priceUsd}
                           </TableCell>
                           <TableCell>
                             <Badge variant={celebrity.status === "active" ? "default" : "secondary"}>
@@ -289,22 +322,25 @@ export default function AdminCelebrities() {
                             <div className="flex justify-end gap-2">
                               <Dialog open={editingCelebrity?.id === celebrity.id} onOpenChange={(open) => !open && setEditingCelebrity(null)}>
                                 <DialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(celebrity)} data-testid={`button-edit-${celebrity.id}`}>
+                                  <Button variant="ghost" size="icon" onClick={() => setEditingCelebrity(celebrity)}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent>
+                                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                                   <DialogHeader>
                                     <DialogTitle>Edit Celebrity</DialogTitle>
                                   </DialogHeader>
-                                  <CelebrityForm />
+                                  <CelebrityForm 
+                                    initialData={celebrity}
+                                    onSubmit={(data: any) => updateMutation.mutate({ id: celebrity.id, data })}
+                                    isSubmitting={updateMutation.isPending}
+                                  />
                                 </DialogContent>
                               </Dialog>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => deleteMutation.mutate(celebrity.id)}
-                                data-testid={`button-delete-${celebrity.id}`}
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>

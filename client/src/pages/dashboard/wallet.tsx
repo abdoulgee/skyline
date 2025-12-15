@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Wallet, Plus, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle, XCircle, Copy, ExternalLink } from "lucide-react";
+import { Wallet, Plus, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle, XCircle, Copy } from "lucide-react";
 import { Header } from "@/components/header";
 import { MobileNav } from "@/components/mobile-nav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Deposit } from "@shared/schema";
@@ -94,8 +94,14 @@ export default function WalletPage() {
     return (usdAmount / price).toFixed(8);
   };
 
+  const isConversionValid = useMemo(() => {
+    const usdAmount = parseFloat(amount);
+    const price = cryptoPrices?.[selectedCoin];
+    return usdAmount >= 10 && !isNaN(usdAmount) && !!price && price > 0;
+  }, [amount, cryptoPrices, selectedCoin]);
+
   const handleProceed = () => {
-    if (!amount || parseFloat(amount) < 10) {
+    if (!isConversionValid) {
       toast({
         title: "Invalid Amount",
         description: "Minimum deposit is $10 USD",

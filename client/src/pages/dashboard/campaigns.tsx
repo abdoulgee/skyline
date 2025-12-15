@@ -110,7 +110,7 @@ export default function CampaignsPage() {
               <h1 className="font-heading font-bold text-2xl md:text-3xl mb-2">My Campaigns</h1>
               <p className="text-muted-foreground">Manage your celebrity campaign requests.</p>
             </div>
-            <Link href="/celebrities">
+            <Link href="/campaign-directory"> {/* Link to new campaign directory */}
               <Button className="gap-2" data-testid="button-new-campaign">
                 <Plus className="h-4 w-4" />
                 New Campaign
@@ -155,8 +155,8 @@ export default function CampaignsPage() {
                     <p className="text-muted-foreground mb-4">
                       Start by browsing our celebrity directory and requesting a campaign.
                     </p>
-                    <Link href="/celebrities">
-                      <Button data-testid="button-browse-to-campaign">Browse Celebrities</Button>
+                    <Link href="/campaign-directory">
+                      <Button>Browse Campaign Celebrities</Button>
                     </Link>
                   </CardContent>
                 </Card>

@@ -9,7 +9,7 @@ import {
   adminLogs,
   settings,
   type User,
-  type UpsertUser,
+  type InsertUser,
   type Celebrity,
   type InsertCelebrity,
   type Booking,
@@ -28,17 +28,17 @@ import {
   type AdminLog,
   type InsertAdminLog,
   type Setting,
-  type InsertSetting,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, sql } from "drizzle-orm";
+import { eq, desc, or, sql } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
-  updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
-  updateUserBalance(id: string, amount: number): Promise<User | undefined>;
+  updateUserBalance(id: number, amount: number): Promise<User | undefined>;
 
   getCelebrity(id: number): Promise<Celebrity | undefined>;
   getAllCelebrities(): Promise<Celebrity[]>;
@@ -47,33 +47,33 @@ export interface IStorage {
   deleteCelebrity(id: number): Promise<boolean>;
 
   getBooking(id: number): Promise<BookingWithDetails | undefined>;
-  getBookingsByUser(userId: string): Promise<BookingWithDetails[]>;
+  getBookingsByUser(userId: number): Promise<BookingWithDetails[]>;
   getAllBookings(): Promise<BookingWithDetails[]>;
   createBooking(data: InsertBooking): Promise<Booking>;
-  createBookingWithBalanceDeduction(userId: string, data: InsertBooking): Promise<{ booking: Booking; user: User }>;
+  createBookingWithBalanceDeduction(userId: number, data: InsertBooking): Promise<{ booking: Booking; user: User }>;
   updateBookingStatus(id: number, status: string): Promise<Booking | undefined>;
 
   getCampaign(id: number): Promise<CampaignWithDetails | undefined>;
-  getCampaignsByUser(userId: string): Promise<CampaignWithDetails[]>;
+  getCampaignsByUser(userId: number): Promise<CampaignWithDetails[]>;
   getAllCampaigns(): Promise<CampaignWithDetails[]>;
   createCampaign(data: InsertCampaign): Promise<Campaign>;
   updateCampaign(id: number, data: Partial<Campaign>): Promise<Campaign | undefined>;
 
   getMessagesByThread(threadId: string): Promise<Message[]>;
-  getThreadsForUser(userId: string): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message }[]>;
+  getThreadsForUser(userId: number): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message }[]>;
   getAllThreads(): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message; user: User }[]>;
   createMessage(data: InsertMessage): Promise<Message>;
 
   getDeposit(id: number): Promise<DepositWithUser | undefined>;
-  getDepositsByUser(userId: string): Promise<Deposit[]>;
+  getDepositsByUser(userId: number): Promise<Deposit[]>;
   getAllDeposits(): Promise<DepositWithUser[]>;
   createDeposit(data: InsertDeposit): Promise<Deposit>;
   updateDepositStatus(id: number, status: string, txHash?: string): Promise<Deposit | undefined>;
 
-  getNotificationsByUser(userId: string): Promise<Notification[]>;
+  getNotificationsByUser(userId: number): Promise<Notification[]>;
   createNotification(data: InsertNotification): Promise<Notification>;
   markNotificationRead(id: number): Promise<void>;
-  markAllNotificationsRead(userId: string): Promise<void>;
+  markAllNotificationsRead(userId: number): Promise<void>;
 
   createAdminLog(data: InsertAdminLog): Promise<AdminLog>;
   getAdminLogs(): Promise<AdminLog[]>;
@@ -84,30 +84,22 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: string): Promise<User | undefined> {
+  async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          email: userData.email,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          profileImageUrl: userData.profileImageUrl,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateUser(id: number, data: Partial<User>): Promise<User | undefined> {
     const [user] = await db
       .update(users)
       .set({ ...data, updatedAt: new Date() })
@@ -120,7 +112,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users).orderBy(desc(users.createdAt));
   }
 
-  async updateUserBalance(id: string, amount: number): Promise<User | undefined> {
+  async updateUserBalance(id: number, amount: number): Promise<User | undefined> {
     const [user] = await db
       .update(users)
       .set({
@@ -147,16 +139,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCelebrity(id: number, data: Partial<Celebrity>): Promise<Celebrity | undefined> {
+    // Explicitly exclude createdAt/updatedAt from the spread if they exist in `data`
+    // to prevent type errors, then manually set updatedAt to current date.
+    const { createdAt, updatedAt, ...safeData } = data as any;
+    
     const [celebrity] = await db
       .update(celebrities)
-      .set(data)
+      .set({ ...safeData }) // Let DB handle updatedAt trigger if exists, or ignore
       .where(eq(celebrities.id, id))
       .returning();
     return celebrity;
   }
 
   async deleteCelebrity(id: number): Promise<boolean> {
-    const result = await db
+    await db
       .update(celebrities)
       .set({ status: "deleted" })
       .where(eq(celebrities.id, id));
@@ -174,10 +170,12 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.id, booking.userId));
     const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, booking.celebrityId));
 
+    if (!user || !celebrity) return undefined;
+
     return { ...booking, user, celebrity };
   }
 
-  async getBookingsByUser(userId: string): Promise<BookingWithDetails[]> {
+  async getBookingsByUser(userId: number): Promise<BookingWithDetails[]> {
     const userBookings = await db
       .select()
       .from(bookings)
@@ -188,7 +186,9 @@ export class DatabaseStorage implements IStorage {
     for (const booking of userBookings) {
       const [user] = await db.select().from(users).where(eq(users.id, booking.userId));
       const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, booking.celebrityId));
-      result.push({ ...booking, user, celebrity });
+      if (user && celebrity) {
+        result.push({ ...booking, user, celebrity });
+      }
     }
     return result;
   }
@@ -203,7 +203,9 @@ export class DatabaseStorage implements IStorage {
     for (const booking of allBookings) {
       const [user] = await db.select().from(users).where(eq(users.id, booking.userId));
       const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, booking.celebrityId));
-      result.push({ ...booking, user, celebrity });
+      if (user && celebrity) {
+        result.push({ ...booking, user, celebrity });
+      }
     }
     return result;
   }
@@ -213,7 +215,7 @@ export class DatabaseStorage implements IStorage {
     return booking;
   }
 
-  async createBookingWithBalanceDeduction(userId: string, data: InsertBooking): Promise<{ booking: Booking; user: User }> {
+  async createBookingWithBalanceDeduction(userId: number, data: InsertBooking): Promise<{ booking: Booking; user: User }> {
     const priceNum = parseFloat(data.priceUsd);
     
     return await db.transaction(async (tx) => {
@@ -263,10 +265,12 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.id, campaign.userId));
     const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, campaign.celebrityId));
 
+    if (!user || !celebrity) return undefined;
+
     return { ...campaign, user, celebrity };
   }
 
-  async getCampaignsByUser(userId: string): Promise<CampaignWithDetails[]> {
+  async getCampaignsByUser(userId: number): Promise<CampaignWithDetails[]> {
     const userCampaigns = await db
       .select()
       .from(campaigns)
@@ -277,7 +281,9 @@ export class DatabaseStorage implements IStorage {
     for (const campaign of userCampaigns) {
       const [user] = await db.select().from(users).where(eq(users.id, campaign.userId));
       const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, campaign.celebrityId));
-      result.push({ ...campaign, user, celebrity });
+       if (user && celebrity) {
+        result.push({ ...campaign, user, celebrity });
+      }
     }
     return result;
   }
@@ -292,7 +298,9 @@ export class DatabaseStorage implements IStorage {
     for (const campaign of allCampaigns) {
       const [user] = await db.select().from(users).where(eq(users.id, campaign.userId));
       const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, campaign.celebrityId));
-      result.push({ ...campaign, user, celebrity });
+      if (user && celebrity) {
+        result.push({ ...campaign, user, celebrity });
+      }
     }
     return result;
   }
@@ -319,62 +327,61 @@ export class DatabaseStorage implements IStorage {
       .orderBy(messages.createdAt);
   }
 
-  async getThreadsForUser(userId: string): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message }[]> {
-    const userMessages = await db
-      .select()
-      .from(messages)
-      .orderBy(desc(messages.createdAt));
-
-    const threadMap = new Map<string, Message>();
+  async getThreadsForUser(userId: number): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message }[]> {
+    // 1. Get all messages for user
+    const allMessages = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.senderUserId, userId))
+        .orderBy(desc(messages.createdAt));
+        
+    // 2. Extract unique thread IDs
+    const threadIds = new Set<string>();
+    allMessages.forEach(m => threadIds.add(m.threadId));
     
-    for (const msg of userMessages) {
-      if (msg.senderUserId === userId || msg.sender === "admin") {
-        if (!threadMap.has(msg.threadId)) {
-          threadMap.set(msg.threadId, msg);
-        }
-      }
-    }
-
-    const userBookings = await db.select().from(bookings).where(eq(bookings.userId, userId));
-    const userCampaigns = await db.select().from(campaigns).where(eq(campaigns.userId, userId));
-
-    const bookingThreadIds = userBookings.map(b => `booking-${b.id}`);
-    const campaignThreadIds = userCampaigns.map(c => `campaign-${c.id}`);
-
     const threads: { threadId: string; threadType: string; referenceId: number; lastMessage: Message }[] = [];
 
-    for (const [threadId, lastMessage] of threadMap) {
-      if (bookingThreadIds.includes(threadId) || campaignThreadIds.includes(threadId)) {
-        threads.push({
-          threadId,
-          threadType: lastMessage.threadType,
-          referenceId: lastMessage.referenceId,
-          lastMessage,
-        });
-      }
+    // 3. Get latest message for each thread
+    for (const threadId of threadIds) {
+        const [lastMessage] = await db
+          .select()
+          .from(messages)
+          .where(eq(messages.threadId, threadId))
+          .orderBy(desc(messages.createdAt))
+          .limit(1);
+
+        if (lastMessage) {
+            threads.push({
+                threadId,
+                threadType: lastMessage.threadType,
+                referenceId: lastMessage.referenceId,
+                lastMessage,
+            });
+        }
     }
 
     return threads;
   }
 
   async getAllThreads(): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message; user: User }[]> {
+    // 1. Get all messages ordered by date desc
     const allMessages = await db
-      .select()
-      .from(messages)
-      .orderBy(desc(messages.createdAt));
+        .select()
+        .from(messages)
+        .orderBy(desc(messages.createdAt));
 
+    // 2. Extract unique thread IDs locally to avoid SQL compatibility issues
     const threadMap = new Map<string, Message>();
-    
     for (const msg of allMessages) {
-      if (!threadMap.has(msg.threadId)) {
-        threadMap.set(msg.threadId, msg);
-      }
+        if (!threadMap.has(msg.threadId)) {
+            threadMap.set(msg.threadId, msg);
+        }
     }
 
     const threads: { threadId: string; threadType: string; referenceId: number; lastMessage: Message; user: User }[] = [];
 
-    for (const [threadId, lastMessage] of threadMap) {
-      let userId: string | null = null;
+    for (const lastMessage of threadMap.values()) {
+      let userId: number | null = null;
       
       if (lastMessage.threadType === "booking") {
         const [booking] = await db.select().from(bookings).where(eq(bookings.id, lastMessage.referenceId));
@@ -388,7 +395,7 @@ export class DatabaseStorage implements IStorage {
         const [user] = await db.select().from(users).where(eq(users.id, userId));
         if (user) {
           threads.push({
-            threadId,
+            threadId: lastMessage.threadId,
             threadType: lastMessage.threadType,
             referenceId: lastMessage.referenceId,
             lastMessage,
@@ -411,10 +418,11 @@ export class DatabaseStorage implements IStorage {
     if (!deposit) return undefined;
 
     const [user] = await db.select().from(users).where(eq(users.id, deposit.userId));
+    if (!user) return undefined;
     return { ...deposit, user };
   }
 
-  async getDepositsByUser(userId: string): Promise<Deposit[]> {
+  async getDepositsByUser(userId: number): Promise<Deposit[]> {
     return db
       .select()
       .from(deposits)
@@ -431,7 +439,9 @@ export class DatabaseStorage implements IStorage {
     const result: DepositWithUser[] = [];
     for (const deposit of allDeposits) {
       const [user] = await db.select().from(users).where(eq(users.id, deposit.userId));
-      result.push({ ...deposit, user });
+      if (user) {
+        result.push({ ...deposit, user });
+      }
     }
     return result;
   }
@@ -453,7 +463,7 @@ export class DatabaseStorage implements IStorage {
     return deposit;
   }
 
-  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+  async getNotificationsByUser(userId: number): Promise<Notification[]> {
     return db
       .select()
       .from(notifications)
@@ -473,7 +483,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(notifications.id, id));
   }
 
-  async markAllNotificationsRead(userId: string): Promise<void> {
+  async markAllNotificationsRead(userId: number): Promise<void> {
     await db
       .update(notifications)
       .set({ isRead: true })
