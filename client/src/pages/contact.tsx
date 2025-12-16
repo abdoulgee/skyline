@@ -79,9 +79,7 @@ export default function Contact() {
                       <div>
                         <h3 className="font-semibold mb-1">Email</h3>
                         <p className="text-muted-foreground text-sm">
-                          General: contact@skylineltd.com<br />
-                          Bookings: bookings@skylineltd.com<br />
-                          Press: media@skylineltd.com
+                          General: contact@skylineltd.org
                         </p>
                       </div>
                     </div>

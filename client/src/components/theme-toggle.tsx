@@ -9,7 +9,7 @@ import {
 import { useTheme } from "@/components/theme-provider";
 
 export function ThemeToggle() {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   return (
     <DropdownMenu>
@@ -21,13 +21,22 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")} data-testid="button-theme-light">
+        <DropdownMenuItem
+          onClick={() => setTheme("light")}
+          data-testid="button-theme-light"
+        >
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")} data-testid="button-theme-dark">
+        <DropdownMenuItem
+          onClick={() => setTheme("dark")}
+          data-testid="button-theme-dark"
+        >
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")} data-testid="button-theme-system">
+        <DropdownMenuItem
+          onClick={() => setTheme("system")}
+          data-testid="button-theme-system"
+        >
           System
         </DropdownMenuItem>
       </DropdownMenuContent>

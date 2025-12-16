@@ -32,7 +32,7 @@ export function CTASection() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                <a href="/api/login">
+                <a href="/auth">
                   <Button size="lg" className="bg-skyline-cyan hover:bg-skyline-cyan/90 text-white font-semibold px-8 gap-2" data-testid="button-cta-get-started">
                     Get Started
                     <ArrowRight className="h-5 w-5" />

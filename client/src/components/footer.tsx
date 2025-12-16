@@ -72,7 +72,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="h-4 w-4 text-skyline-cyan flex-shrink-0" />
-                <span className="text-white/70 text-sm">contact@skylineltd.com</span>
+                <span className="text-white/70 text-sm">contact@skylineltd.org</span>
               </div>
               <div className="flex items-center gap-3">
                 <Phone className="h-4 w-4 text-skyline-cyan flex-shrink-0" />

@@ -9,14 +9,14 @@ const slides = [
     title: "Book World-Class Celebrities",
     subtitle: "Exclusive Access to A-List Talent",
     description: "Connect with the biggest names in entertainment for events, endorsements, and brand partnerships.",
-    image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600&h=900&fit=crop",
+    image: "https://images.unsplash.com/photo-1676113462184-ccbf85282eed?w=1600&h=900&fit=crop",
   },
   {
     id: 2,
     title: "Premium Campaign Solutions",
     subtitle: "Elevate Your Brand",
     description: "Launch powerful marketing campaigns with celebrity endorsements that drive results.",
-    image: "https://images.unsplash.com/photo-1522158637959-30385a09e690?w=1600&h=900&fit=crop",
+    image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600&h=900&fit=crop",
   },
   {
     id: 3,

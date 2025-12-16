@@ -32,6 +32,19 @@ import {
 import { db } from "./db";
 import { eq, desc, or, sql } from "drizzle-orm";
 
+// New type definition for threads with context (Celebrity and User info)
+interface ThreadWithContext {
+  threadId: string;
+  threadType: "booking" | "campaign";
+  referenceId: number;
+  lastMessage: Message;
+  user: User;
+  celebrity: {
+    name: string;
+    imageUrl: string | null;
+  };
+}
+
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -60,8 +73,8 @@ export interface IStorage {
   updateCampaign(id: number, data: Partial<Campaign>): Promise<Campaign | undefined>;
 
   getMessagesByThread(threadId: string): Promise<Message[]>;
-  getThreadsForUser(userId: number): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message }[]>;
-  getAllThreads(): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message; user: User }[]>;
+  getThreadsForUser(userId: number): Promise<ThreadWithContext[]>;
+  getAllThreads(): Promise<ThreadWithContext[]>;
   createMessage(data: InsertMessage): Promise<Message>;
 
   getDeposit(id: number): Promise<DepositWithUser | undefined>;
@@ -139,13 +152,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCelebrity(id: number, data: Partial<Celebrity>): Promise<Celebrity | undefined> {
-    // Explicitly exclude createdAt/updatedAt from the spread if they exist in `data`
-    // to prevent type errors, then manually set updatedAt to current date.
     const { createdAt, updatedAt, ...safeData } = data as any;
     
     const [celebrity] = await db
       .update(celebrities)
-      .set({ ...safeData }) // Let DB handle updatedAt trigger if exists, or ignore
+      .set({ ...safeData })
       .where(eq(celebrities.id, id))
       .returning();
     return celebrity;
@@ -327,88 +338,116 @@ export class DatabaseStorage implements IStorage {
       .orderBy(messages.createdAt);
   }
 
-  async getThreadsForUser(userId: number): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message }[]> {
-    // 1. Get all messages for user
-    const allMessages = await db
+  // --- THREAD LIST FUNCTIONS MODIFIED TO INCLUDE CELEBRITY CONTEXT ---
+
+  async getThreadsForUser(userId: number): Promise<ThreadWithContext[]> {
+    // 1. Get all messages for user to determine unique threads
+    const allUserMessages = await db
         .select()
         .from(messages)
         .where(eq(messages.senderUserId, userId))
         .orderBy(desc(messages.createdAt));
         
-    // 2. Extract unique thread IDs
-    const threadIds = new Set<string>();
-    allMessages.forEach(m => threadIds.add(m.threadId));
+    const threadMap = new Map<string, Message>();
+    allUserMessages.forEach(m => {
+        if (!threadMap.has(m.threadId)) {
+            threadMap.set(m.threadId, m);
+        }
+    });
     
-    const threads: { threadId: string; threadType: string; referenceId: number; lastMessage: Message }[] = [];
+    const threads: ThreadWithContext[] = [];
 
-    // 3. Get latest message for each thread
-    for (const threadId of threadIds) {
-        const [lastMessage] = await db
-          .select()
-          .from(messages)
-          .where(eq(messages.threadId, threadId))
-          .orderBy(desc(messages.createdAt))
-          .limit(1);
+    for (const lastMessage of threadMap.values()) {
+        const referenceId = lastMessage.referenceId;
+        const threadType = lastMessage.threadType;
+        let celebrityId: number | null = null;
+        
+        // Find associated Celebrity ID from Booking or Campaign table
+        if (threadType === "booking") {
+            const [booking] = await db.select().from(bookings).where(eq(bookings.id, referenceId));
+            celebrityId = booking?.celebrityId || null;
+        } else if (threadType === "campaign") {
+            const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, referenceId));
+            celebrityId = campaign?.celebrityId || null;
+        }
 
-        if (lastMessage) {
-            threads.push({
-                threadId,
-                threadType: lastMessage.threadType,
-                referenceId: lastMessage.referenceId,
-                lastMessage,
-            });
+        if (celebrityId) {
+            const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, celebrityId));
+            
+            if (celebrity) {
+                threads.push({
+                    threadId: lastMessage.threadId,
+                    threadType: threadType,
+                    referenceId: referenceId,
+                    lastMessage: lastMessage,
+                    user: (await this.getUser(userId))!, // User is guaranteed to exist
+                    celebrity: { name: celebrity.name, imageUrl: celebrity.imageUrl || null },
+                });
+            }
         }
     }
-
     return threads;
   }
 
-  async getAllThreads(): Promise<{ threadId: string; threadType: string; referenceId: number; lastMessage: Message; user: User }[]> {
+  async getAllThreads(): Promise<ThreadWithContext[]> {
     // 1. Get all messages ordered by date desc
     const allMessages = await db
         .select()
         .from(messages)
         .orderBy(desc(messages.createdAt));
 
-    // 2. Extract unique thread IDs locally to avoid SQL compatibility issues
     const threadMap = new Map<string, Message>();
-    for (const msg of allMessages) {
+    allMessages.forEach(msg => {
         if (!threadMap.has(msg.threadId)) {
             threadMap.set(msg.threadId, msg);
         }
-    }
+    });
 
-    const threads: { threadId: string; threadType: string; referenceId: number; lastMessage: Message; user: User }[] = [];
+    const threads: ThreadWithContext[] = [];
 
     for (const lastMessage of threadMap.values()) {
+      const referenceId = lastMessage.referenceId;
+      const threadType = lastMessage.threadType;
       let userId: number | null = null;
-      
-      if (lastMessage.threadType === "booking") {
-        const [booking] = await db.select().from(bookings).where(eq(bookings.id, lastMessage.referenceId));
+      let celebrityId: number | null = null;
+
+      // Find associated User and Celebrity
+      if (threadType === "booking") {
+        const [booking] = await db.select().from(bookings).where(eq(bookings.id, referenceId));
         userId = booking?.userId || null;
-      } else if (lastMessage.threadType === "campaign") {
-        const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, lastMessage.referenceId));
+        celebrityId = booking?.celebrityId || null;
+      } else if (threadType === "campaign") {
+        const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, referenceId));
         userId = campaign?.userId || null;
+        celebrityId = campaign?.celebrityId || null;
       }
 
-      if (userId) {
+      if (userId && celebrityId) {
         const [user] = await db.select().from(users).where(eq(users.id, userId));
-        if (user) {
+        const [celebrity] = await db.select().from(celebrities).where(eq(celebrities.id, celebrityId));
+        
+        if (user && celebrity) {
           threads.push({
             threadId: lastMessage.threadId,
-            threadType: lastMessage.threadType,
-            referenceId: lastMessage.referenceId,
-            lastMessage,
-            user,
+            threadType: threadType,
+            referenceId: referenceId,
+            lastMessage: lastMessage,
+            user: user,
+            celebrity: { name: celebrity.name, imageUrl: celebrity.imageUrl || null },
           });
         }
       }
     }
-
     return threads;
   }
 
+  // --- End Thread List Functions ---
+
   async createMessage(data: InsertMessage): Promise<Message> {
+    // Ensure that at least text or imageUrl is present before creating a message
+    if (!data.text && !data.imageUrl) {
+        throw new Error("Message content (text or image) is required.");
+    }
     const [message] = await db.insert(messages).values(data).returning();
     return message;
   }

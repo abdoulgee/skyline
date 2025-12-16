@@ -87,7 +87,7 @@ export default function Terms() {
               Skyline LTD<br />
               350 Fifth Avenue, Suite 5000<br />
               New York, NY 10118<br />
-              Email: legal@skylineltd.com
+              Email: legal@skylineltd.org
             </address>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch } from "wouter";
-import { MessageSquare, Send, ArrowLeft, Calendar, Megaphone, Users } from "lucide-react";
+import { MessageSquare, Send, ArrowLeft, Users, Image as ImageIcon, Smile, Loader2 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,23 +10,33 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Message, User } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import type { Message, User } from "@shared/schema";
+import { Label } from "@/components/ui/label";
 
 interface Thread {
   id: string;
   threadId: string;
-  type: "booking" | "campaign";
-  threadType: "booking" | "campaign"; // backend naming
+  threadType: "booking" | "campaign";
   referenceId: number;
+  lastMessage: Message;
   user: User;
   celebrity: {
     name: string;
     imageUrl: string | null;
   };
 }
+
+const getImageSrc = (url: string | null) => {
+    if (!url) return undefined;
+    if (url.startsWith("http") || url.startsWith("https")) return url;
+    if (url.startsWith("/uploads/")) return url; 
+    if (url.startsWith("uploads/")) return `/${url}`;
+    return url;
+};
 
 export default function AdminMessages() {
   const { user: adminUser } = useAuth();
@@ -38,11 +48,14 @@ export default function AdminMessages() {
 
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [message, setMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: threads, isLoading: threadsLoading } = useQuery<Thread[]>({
     queryKey: ["/api/messages"],
-    enabled: !!adminUser && adminUser.role === 'admin'
+    enabled: !!adminUser && adminUser.role === 'admin',
+    refetchInterval: 10000, // Real-time fix: Poll threads every 10 seconds
   });
 
   const threadId = selectedThread ? selectedThread.threadId : null;
@@ -50,17 +63,24 @@ export default function AdminMessages() {
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages", threadId],
     enabled: !!threadId,
-    refetchInterval: 5000 // Poll for new messages
+    refetchInterval: 3000, // Real-time fix: Poll messages every 3 seconds
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (text: string) => {
-      if (!selectedThread) return;
+    mutationFn: async (payload: { text?: string; imageUrl?: string }) => {
+      if (!selectedThread) throw new Error("No active thread.");
+      
+      const text = payload.text || null;
+      const imageUrl = payload.imageUrl || null;
+      
+      if (!text && !imageUrl) throw new Error("Message content is required.");
+      
       return apiRequest("POST", "/api/admin/messages", {
         threadId: selectedThread.threadId,
         threadType: selectedThread.threadType,
         referenceId: selectedThread.referenceId,
         text,
+        imageUrl,
       });
     },
     onSuccess: () => {
@@ -73,9 +93,10 @@ export default function AdminMessages() {
   });
 
   useEffect(() => {
-    if (typeParam && idParam && threads && threads.length > 0) {
+    if (typeParam && idParam && threads && !selectedThread) {
+      const fullThreadId = `${typeParam}-${idParam}`;
       const thread = threads.find(
-        (t) => t.threadType === typeParam && t.referenceId === parseInt(idParam)
+        (t) => t.threadId === fullThreadId
       );
       if (thread) {
         setSelectedThread(thread);
@@ -87,11 +108,45 @@ export default function AdminMessages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, selectedThread]);
 
-  const handleSendMessage = () => {
-    if (!message.trim()) return;
-    sendMessageMutation.mutate(message);
+  const handleSendMessage = (imageUrl?: string) => {
+    if (!message.trim() && !imageUrl) return;
+    
+    sendMessageMutation.mutate({ 
+        text: message.trim() || undefined,
+        imageUrl: imageUrl || undefined
+    });
   };
+  
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("images", file); 
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!res.ok) throw new Error("Upload failed");
+      
+      const data = await res.json();
+      const imageUrl = data.paths[0]; 
+
+      handleSendMessage(imageUrl);
+      
+    } catch (error) {
+      toast({ title: "Image Upload Error", description: "Failed to upload image.", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+
+  
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -139,24 +194,20 @@ export default function AdminMessages() {
                             selectedThread?.threadId === thread.threadId ? "bg-muted" : ""
                           }`}
                         >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={thread.user.profileImageUrl || undefined} />
-                              <AvatarFallback>{thread.user.firstName?.[0] || thread.user.username?.[0]?.toUpperCase()}</AvatarFallback>
+                          <div className="flex items-start gap-3">
+                            <Avatar className="h-10 w-10 flex-shrink-0">
+                                <AvatarImage src={thread.celebrity.imageUrl || undefined} />
+                                <AvatarFallback>{thread.celebrity.name[0]}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-sm truncate">
-                                  {thread.user.firstName || thread.user.username}
-                                </p>
-                                {thread.threadType === "booking" ? (
-                                  <Calendar className="h-3 w-3 text-primary flex-shrink-0" />
-                                ) : (
-                                  <Megaphone className="h-3 w-3 text-chart-4 flex-shrink-0" />
-                                )}
-                              </div>
+                              <p className="font-medium text-sm truncate">
+                                {thread.celebrity.name} (User: {thread.user.username})
+                              </p>
                               <p className="text-xs text-muted-foreground truncate">
-                                Ref #{thread.referenceId}
+                                {thread.lastMessage.text || "Image message"}
+                              </p>
+                              <p className="text-xs text-muted-foreground/70">
+                                Ref: {thread.threadType.toUpperCase()} #{thread.referenceId}
                               </p>
                             </div>
                           </div>
@@ -188,15 +239,13 @@ export default function AdminMessages() {
                         <ArrowLeft className="h-5 w-5" />
                       </Button>
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={selectedThread.user.profileImageUrl || undefined} />
-                        <AvatarFallback>{selectedThread.user.firstName?.[0]}</AvatarFallback>
+                        <AvatarImage src={selectedThread.celebrity.imageUrl || undefined} />
+                        <AvatarFallback>{selectedThread.celebrity.name[0]}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <p className="font-semibold">
-                          {selectedThread.user.firstName || selectedThread.user.username}
-                        </p>
+                        <p className="font-semibold">Chatting as: {selectedThread.celebrity.name} (Agent)</p>
                         <p className="text-xs text-muted-foreground">
-                          Topic: {selectedThread.threadType} #{selectedThread.referenceId}
+                          User: {selectedThread.user.firstName || selectedThread.user.username} | Topic: {selectedThread.threadType.toUpperCase()} #{selectedThread.referenceId}
                         </p>
                       </div>
                       <Badge variant="secondary">Agent Mode</Badge>
@@ -205,11 +254,11 @@ export default function AdminMessages() {
 
                   <ScrollArea className="flex-1 p-4">
                     {messagesLoading ? (
-                      <div className="space-y-4">
-                        {Array.from({ length: 3 }).map((_, i) => (
-                          <Skeleton key={i} className="h-16 w-3/4" />
-                        ))}
-                      </div>
+                       <div className="space-y-4">
+                        <Skeleton className="h-10 w-3/4" />
+                        <Skeleton className="h-10 w-1/2 ml-auto" />
+                        <Skeleton className="h-10 w-full" />
+                       </div>
                     ) : messages && messages.length > 0 ? (
                       <div className="space-y-4">
                         {messages.map((msg) => (
@@ -224,7 +273,15 @@ export default function AdminMessages() {
                                   : "bg-muted"
                               }`}
                             >
-                              <p className="text-sm">{msg.text}</p>
+                              {msg.imageUrl && (
+                                <img 
+                                    src={getImageSrc(msg.imageUrl)} 
+                                    alt="Message image" 
+                                    className="max-w-xs max-h-40 rounded-lg mb-2"
+                                />
+                              )}
+                              {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
+                              
                               <p className={`text-[10px] mt-1 text-right ${
                                 msg.sender === "admin" ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}>
@@ -239,26 +296,48 @@ export default function AdminMessages() {
                       <div className="h-full flex items-center justify-center text-center text-muted-foreground">
                         <div>
                           <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p>No messages yet</p>
+                          <p>No messages yet.</p>
                         </div>
                       </div>
                     )}
                   </ScrollArea>
 
-                  {/* Message Input - Explicitly visible */}
                   <div className="border-t p-4 flex-shrink-0 bg-background">
-                    <div className="flex gap-2">
-                      <Input
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Type your message as agent..."
-                        className="flex-1"
-                        autoFocus
-                      />
+                    <div className="flex items-center gap-2">
+                        {/* Image Upload Button */}
+                        <Label htmlFor="message-image-upload" className="cursor-pointer">
+                            <Button 
+                                variant="outline" 
+                                size="icon" 
+                                asChild 
+                                disabled={isUploading || sendMessageMutation.isPending}
+                            >
+                                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                            </Button>
+                        </Label>
+                        <Input 
+                            id="message-image-upload" 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={handleImageUpload}
+                            disabled={isUploading}
+                        />
+
+                
+
+                        {/* Text Input */}
+                        <Input
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Type your message..."
+                            className="flex-1"
+                            autoFocus
+                        />
                       <Button
-                        onClick={handleSendMessage}
-                        disabled={!message.trim() || sendMessageMutation.isPending}
+                        onClick={() => handleSendMessage()}
+                        disabled={(!message.trim() && !isUploading) || sendMessageMutation.isPending}
                       >
                         <Send className="h-4 w-4" />
                       </Button>

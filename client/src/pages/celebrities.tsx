@@ -60,11 +60,12 @@ export default function Celebrities({ defaultFilter }: { defaultFilter?: string 
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
+        {/*
         <section className="relative py-16 md:py-24 bg-gradient-to-b from-skyline-navy to-skyline-navy/90">
           <div className="container mx-auto px-4 md:px-6 lg:px-8 relative z-10">
             <div className="text-center text-white">
               <h1 className="font-heading font-bold text-4xl md:text-5xl lg:text-6xl mb-4 text-3d">
-                {showCampaignOnly ? "Campaign Talent" : "Celebrity Directory"}
+                {showCampaignOnly ? "Campaign Talent" : "Celebrities"}
               </h1>
               <p className="text-white/80 text-lg max-w-2xl mx-auto">
                 {showCampaignOnly 
@@ -74,7 +75,7 @@ export default function Celebrities({ defaultFilter }: { defaultFilter?: string 
               </p>
             </div>
           </div>
-        </section>
+        </section> */}
 
         <section className="py-8 border-b bg-background sticky top-16 z-40">
           <div className="container mx-auto px-4 md:px-6 lg:px-8">

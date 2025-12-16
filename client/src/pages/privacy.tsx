@@ -117,7 +117,7 @@ export default function Privacy() {
               Skyline LTD - Privacy Team<br />
               350 Fifth Avenue, Suite 5000<br />
               New York, NY 10118<br />
-              Email: privacy@skylineltd.com
+              Email: privacy@skylineltd.org
             </address>
           </div>
         </div>

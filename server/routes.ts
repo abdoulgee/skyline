@@ -8,13 +8,14 @@ import PDFDocument from "pdfkit";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import bcrypt from "bcryptjs"; // Needed for password reset
 
 // Configure Multer for file uploads
 const storageConfig = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = 'uploads/';
     if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir);
+      fs.mkdirSync(uploadDir, { recursive: true });
     }
     cb(null, uploadDir);
   },
@@ -42,6 +43,7 @@ function isAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 async function getCryptoPrice(coin: string): Promise<number> {
+  // Simple mock for local dev to avoid reliance on external APIs and rate limits
   if (coin === "BTC") return 95000;
   if (coin === "ETH") return 3500;
   if (coin === "USDT") return 1;
@@ -219,10 +221,23 @@ export async function registerRoutes(
     }
   });
 
-  // Re-include all admin GET routes
   app.get("/api/admin/users", isAuthenticated, isAdmin, async (req, res) => {
     const users = await storage.getAllUsers();
     res.json(users);
+  });
+
+  // NEW: Admin route to delete a user
+  app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        // Add delete logic to storage if missing or implement directly
+        // For now, assuming storage handles standard user updates/soft delete
+        // If storage.deleteUser exists use it, otherwise soft delete via update
+        await storage.updateUser(id, { status: "deleted" });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ message: "Delete failed" });
+    }
   });
 
   app.get("/api/admin/deposits", isAuthenticated, isAdmin, async (req, res) => {
@@ -328,10 +343,28 @@ export async function registerRoutes(
     }
   });
 
+  // Updated Admin User Edit/Reset Password Route
   app.patch("/api/admin/users/:id", isAuthenticated, isAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
-    const user = await storage.updateUser(id, req.body);
-    res.json(user);
+    const { password, ...otherData } = req.body;
+    
+    let updatePayload = { ...otherData };
+    
+    if (password) {
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            updatePayload.password = hashedPassword;
+        } catch (error) {
+            return res.status(500).json({ message: "Error hashing password" });
+        }
+    }
+
+    try {
+        const user = await storage.updateUser(id, updatePayload);
+        res.json(user);
+    } catch (error) {
+        res.status(400).json({ message: "Failed to update user" });
+    }
   });
   
   app.post("/api/admin/settings", isAuthenticated, isAdmin, async (req, res) => {
@@ -510,7 +543,7 @@ export async function registerRoutes(
   app.post("/api/messages", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const { threadId, threadType, referenceId, text } = req.body;
+      const { threadId, threadType, referenceId, text, imageUrl } = req.body;
 
       const message = await storage.createMessage({
         threadId,
@@ -518,7 +551,8 @@ export async function registerRoutes(
         referenceId: parseInt(referenceId),
         sender: "user",
         senderUserId: userId,
-        text,
+        text: text || null, // Ensure empty string becomes null if image provided
+        imageUrl: imageUrl || null
       });
       
       res.status(201).json(message);
@@ -530,7 +564,7 @@ export async function registerRoutes(
   app.post("/api/admin/messages", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const adminId = req.user.id;
-      const { threadId, threadType, referenceId, text } = req.body;
+      const { threadId, threadType, referenceId, text, imageUrl } = req.body;
 
       const message = await storage.createMessage({
         threadId,
@@ -538,7 +572,8 @@ export async function registerRoutes(
         referenceId: parseInt(referenceId),
         sender: "admin",
         senderUserId: adminId,
-        text,
+        text: text || null,
+        imageUrl: imageUrl || null
       });
 
       let targetUserId: number | null = null;
