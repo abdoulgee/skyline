@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/celebrities", label: "Celebrities" },
-  { href: "/campaigns", label: "Campaigns" }, // Moved here
+  { href: "/campaigns", label: "Campaigns" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ];
@@ -37,14 +37,32 @@ export function Header() {
 
   const unreadCount = notifications?.filter(n => !n.isRead).length || 0;
 
+  // Path to your logo - using one of the uploaded files as requested
+  // Ideally, this should be a static asset in public/ folder, but using uploads works for now.
+  const LOGO_URL = "/uploads/logo.png"; 
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 md:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-md bg-gradient-to-br from-skyline-cyan to-skyline-navy flex items-center justify-center">
-                <span className="text-white font-heading font-bold text-sm">S</span>
+              {/* Replaced 'S' div with Image Logo */}
+              <div className="h-10 w-10 flex items-center justify-center overflow-hidden rounded-md">
+                 <img 
+                    src={LOGO_URL} 
+                    alt="Skyline Logo" 
+                    className="h-full w-full object-contain"
+                    onError={(e) => {
+                        // Fallback if image fails to load
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
+                 />
+                 {/* Fallback 'S' if image missing - hidden by default */}
+                 <div className="hidden h-8 w-8 rounded-md bg-gradient-to-br from-skyline-cyan to-skyline-navy flex items-center justify-center">
+                    <span className="text-white font-heading font-bold text-sm">S</span>
+                 </div>
               </div>
               <span className="font-heading font-bold text-xl hidden sm:block">
                 <span className="text-skyline-navy dark:text-white">Skyline</span>
@@ -74,14 +92,9 @@ export function Header() {
 
             {user ? (
               <>
-                {/* Mobile Icons (Always shown when logged in) */}
+                {/* Mobile Icons */}
                 <div className="flex items-center gap-2">
-                    {/*<Link href="/dashboard/messages">
-                      <Button variant="ghost" size="icon" className="relative">
-                        <MessageSquare className="h-5 w-5" />
-                        <span className="sr-only">Messages</span>
-                      </Button>
-                    </Link> */}
+                    
 
                     <Link href="/dashboard/wallet">
                       <Button variant="ghost" size="icon" className="relative">
@@ -149,7 +162,6 @@ export function Header() {
                   </Button>
                 </Link>
 
-                {/* Mobile Menu Toggle for UN-AUTHENTICATED users 
                 <Button
                   variant="ghost"
                   size="icon"
@@ -157,7 +169,7 @@ export function Header() {
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 >
                   {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                </Button> */}
+                </Button>
               </>
             )}
           </div>

@@ -15,13 +15,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Mail, User, Lock, Phone, Globe, ArrowLeft } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
-// Schema for Login
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
 });
 
-// Schema for Registration
 const registerSchema = z.object({
   firstName: z.string().min(2, "First name is required"),
   lastName: z.string().min(2, "Last name is required"),
@@ -32,7 +30,6 @@ const registerSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-// Schema for Forgot Password
 const forgotPasswordSchema = z.object({
   username: z.string().min(1, "Username is required"),
   email: z.string().email("Invalid email address"),
@@ -94,6 +91,8 @@ export default function AuthPage() {
     }
   };
 
+  const LOGO_URL = "/uploads/logo.png"; 
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 bg-opacity-90 bg-[url('https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -102,8 +101,8 @@ export default function AuthPage() {
       <div className="relative z-10 w-full p-6 flex justify-between items-center container mx-auto">
         <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer group">
-                <div className="h-10 w-10 rounded-md bg-gradient-to-br from-skyline-cyan to-skyline-navy flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                    <span className="text-white font-heading font-bold text-lg">S</span>
+                <div className="h-12 w-12 rounded-md flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform overflow-hidden bg-white/10 p-1">
+                    <img src={LOGO_URL} alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <span className="font-heading font-bold text-2xl text-white tracking-tight">
                     Skyline <span className="text-skyline-gold">LTD</span>

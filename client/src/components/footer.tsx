@@ -1,6 +1,8 @@
 import { Link } from "wouter";
 import { MapPin, Mail, Phone } from "lucide-react";
 
+const LOGO_URL = "/uploads/logo.png"; 
+
 export function Footer() {
   return (
     <footer className="bg-skyline-navy text-white">
@@ -9,7 +11,16 @@ export function Footer() {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="h-10 w-10 rounded-md bg-gradient-to-br from-skyline-cyan to-white/20 flex items-center justify-center">
-                <span className="text-white font-heading font-bold text-lg">S</span>
+                <img 
+                    src={LOGO_URL} 
+                    alt="Skyline Logo" 
+                    className="h-full w-full object-contain"
+                    onError={(e) => {
+                        // Fallback if image fails to load
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
+                 />
               </div>
               <span className="font-heading font-bold text-xl">
                 Skyline<span className="text-skyline-gold"> LTD</span>
