@@ -39,9 +39,10 @@ app.use('/uploads', express.static(uploadsDir));
     await setupVite(httpServer, app);
   }
 
-  const port = process.env.PORT || 5000;
-  app.listen(port, "0.0.0.0", () => {
-    console.log(`Server running on ${port}`);
+  const PORT = Number(process.env.PORT) || 5000;
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`✅ Server running on port ${PORT}`);
   });
+
 
 })();
