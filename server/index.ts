@@ -4,6 +4,27 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
 import fs from "fs";
+import { runMigrations } from "./db/migrate";
+
+const app = express();
+
+const PORT = process.env.PORT || 5000;
+
+async function startServer() {
+  try {
+    await runMigrations(); // 👈 THIS IS THE KEY
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ Failed to start server", err);
+    process.exit(1);
+  }
+}
+
+startServer();
+
 
 const app = express();
 const httpServer = createServer(app);
